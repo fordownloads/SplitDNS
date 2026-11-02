@@ -1,0 +1,4 @@
+# Android shell scripts break with CRLF
+*.sh text eol=lf
+module/META-INF/** text eol=lf
+module/module.prop text eol=lf

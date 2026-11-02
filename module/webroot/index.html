@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Split DNS</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1b1d21; --muted: #667085; --line: #e4e7ec;
+    --accent: #2f6fde; --accent-text: #ffffff; --danger: #d92d20; --chip: #eef2f8;
+    --off: #c3c8d1; --shadow: 0 1px 2px rgba(16, 24, 40, .06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111316; --card: #1b1e23; --text: #e8eaed; --muted: #98a1b0; --line: #2c3139;
+      --accent: #7aa7ff; --accent-text: #0b1220; --danger: #ff6b5e; --chip: #262b33;
+      --off: #4a515c; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 640px; margin: 0 auto;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
+  h1 { font-size: 22px; font-weight: 600; margin: 4px 4px 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 14px 14px 16px; margin-bottom: 10px; box-shadow: var(--shadow); }
+  .card.tap { cursor: pointer; }
+  .row { display: flex; align-items: center; gap: 10px; min-height: 32px; }
+  .title { flex: 1; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .mono { font-family: ui-monospace, "Roboto Mono", Consolas, monospace; font-size: 13px; color: var(--text);
+    margin-top: 4px; word-break: break-all; }
+  .line1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .off .title, .off .mono, .off .sub { opacity: .5; }
+  .section { color: var(--muted); font-size: 13px; margin: 18px 4px 8px; }
+  #groups:empty::after { content: "Нет групп"; display: block; color: var(--muted); padding: 8px 4px; }
+
+  .switch { position: relative; width: 44px; height: 26px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .switch span { position: absolute; inset: 0; border-radius: 13px; background: var(--off); transition: background .15s; }
+  .switch span::after { content: ""; position: absolute; left: 3px; top: 3px; width: 20px; height: 20px;
+    border-radius: 50%; background: #fff; transition: transform .15s; }
+  .switch input:checked + span { background: var(--accent); }
+  .switch input:checked + span::after { transform: translateX(18px); }
+  .switch input:disabled + span { opacity: .5; }
+
+  .check { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px;
+    border-top: 1px solid var(--line); cursor: pointer; }
+  .check input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+
+  .handle { flex: none; width: 32px; height: 32px; margin-right: -6px; display: grid; place-items: center;
+    color: var(--muted); touch-action: none; cursor: grab; }
+  .dragging { position: relative; z-index: 5; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); transition: none; }
+
+  button { font: inherit; border: 0; border-radius: 10px; padding: 10px 16px; cursor: pointer;
+    background: var(--chip); color: var(--text); }
+  button.primary { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+  button.danger { background: transparent; color: var(--danger); padding-left: 4px; padding-right: 4px; }
+  button:disabled { opacity: .5; }
+  .add { width: 100%; padding: 14px; background: var(--card); border: 1px dashed var(--line);
+    color: var(--accent); font-weight: 600; border-radius: 14px; }
+
+  /* PC: centered rounded dialog */
+  dialog { width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 32px); border: 0; padding: 0;
+    border-radius: 16px; background: var(--card); color: var(--text); }
+  dialog::backdrop { background: rgba(0, 0, 0, .45); }
+  dialog form { display: flex; flex-direction: column; max-height: calc(100vh - 32px); }
+  .dlg-body { padding: 18px 18px 8px; overflow-y: auto; }
+  /* Android (KernelSU WebUI): full screen */
+  body.android dialog { width: 100%; height: 100%; max-width: 100vw; max-height: 100vh; margin: 0; border-radius: 0; }
+  body.android dialog form { max-height: 100vh; height: 100%; }
+  body.android .dlg-body { height: 100vh; }
+  .dlg-body h2 { font-size: 18px; margin: 0 0 12px; }
+  label.f { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; }
+  input.t, textarea { width: 100%; font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  textarea { min-height: 38vh; resize: vertical; font-family: ui-monospace, "Roboto Mono", Consolas, monospace; font-size: 13px; }
+  input.t:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .err { font-size: 12px; color: var(--danger); margin-top: 6px; min-height: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips button { padding: 8px 12px; font-size: 14px; }
+  .dlg-actions { margin-top: auto; display: flex; gap: 8px; padding: 12px 18px 16px; border-top: 1px solid var(--line); }
+  .dlg-actions .spacer { flex: 1; }
+
+  #snack { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translate(-50%, 20px);
+    background: #2b2f36; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px;
+    opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; max-width: calc(100vw - 32px); }
+  #snack.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Split DNS</h1>
+
+  <div class="card" id="master">
+    <div class="row">
+      <div class="title">Изменить DNS</div>
+      <label class="switch"><input type="checkbox" id="masterSw"><span></span></label>
+    </div>
+    <div class="sub" id="status">Загрузка…</div>
+    <label class="check">
+      <input type="checkbox" id="redirectCb">
+      <span>Заменять системный DNS</span>
+    </label>
+    <div class="hint" id="redirectHint"></div>
+  </div>
+
+  <!-- Shown instead of #master when opened outside KernelSU (on a PC) -->
+  <div class="card" id="pcCard" hidden>
+    <div class="row"><div class="title">Windows (NRPT)</div></div>
+    <div class="sub">Группы хранятся в этом браузере. Скачайте .bat и запустите его: он покажет статус правил и предложит включить или выключить их.</div>
+    <div class="chips" style="margin-top: 12px">
+      <button type="button" class="primary" id="dlBat">Скачать .bat</button>
+      <button type="button" id="exportBtn">Экспорт domains.txt</button>
+      <button type="button" id="importBtn">Импорт domains.txt</button>
+      <input type="file" id="importFile" accept=".txt,text/plain" hidden>
+    </div>
+  </div>
+
+  <div class="section">Группы DNS · при одинаковом домене побеждает верхняя</div>
+  <div id="groups"></div>
+
+  <div class="card tap" id="global">
+    <div class="row"><div class="title">Глобальный DNS</div></div>
+    <div class="mono" id="globalServers"></div>
+  </div>
+
+  <button class="add" id="addBtn">+ Добавить DNS</button>
+</main>
+
+<dialog id="dlg">
+  <form method="dialog" id="dlgForm" novalidate>
+    <div class="dlg-body">
+      <h2 id="dlgTitle">Новый DNS</h2>
+      <div id="nameWrap">
+        <label class="f" for="fName">Название</label>
+        <input class="t" id="fName" autocomplete="off" placeholder="Например, GeoHide">
+      </div>
+      <label class="f" for="fServers">Адреса DNS</label>
+      <input class="t" id="fServers" autocomplete="off" autocapitalize="off" spellcheck="false"
+             placeholder="9.9.9.10, https://dns.quad9.net/dns-query">
+      <div class="hint" id="serversHint">Через запятую: IP, https://… (DoH), tls://… (DoT), quic://… (DoQ)</div>
+      <div class="hint">Рекомендуется: Quad9 (обычный), GeoHide (обход)</div>
+      <div class="err" id="serversErr"></div>
+      <div class="chips" id="dnsPresets">
+      </div>
+      <div id="domainsWrap">
+        <label class="f" for="fDomains">Домены</label>
+        <textarea id="fDomains" autocapitalize="off" spellcheck="false"
+                  placeholder="google.com&#10;.googleapis.com&#10;youtube.com"></textarea>
+        <div class="hint">Один на строку. «site.com» — сам домен и поддомены, «.site.com» — только поддомены.</div>
+        <div class="err" id="domainsErr"></div>
+        <label class="f">Быстрый выбор доменов</label>
+        <div class="chips">
+          <button type="button" data-list="AI-domains.txt">Нейросети</button>
+          <button type="button" data-list="GeoHide-domains.txt">Список GeoHide</button>
+        </div>
+      </div>
+    </div>
+    <div class="dlg-actions">
+      <button type="button" class="danger" id="delBtn">Удалить</button>
+      <span class="spacer"></span>
+      <button type="button" id="cancelBtn">Отмена</button>
+      <button type="submit" class="primary" id="saveBtn">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="snack"></div>
+
+<!-- Windows script template: cmd/PowerShell polyglot, __PLACEHOLDERS__ filled by buildBat() -->
+<script type="text/plain" id="batTemplate"><# : Split DNS for Windows (NRPT rules). Double-click to run.
+@echo off
+set "SDNS_SELF=%~f0"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ([IO.File]::ReadAllText($env:SDNS_SELF, [Text.Encoding]::UTF8))"
+exit /b
+#>
+$ErrorActionPreference = 'Stop'
+try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
+$Host.UI.RawUI.WindowTitle = 'Split DNS (NRPT)'
+$Tag = 'vpn-dns-bypass'
+$Generated = '__DATE__'
+
+# <servers>TAB<namespace>,<namespace>,...  ("name" exact, ".name" subdomains, "." everything)
+$Rules = @(@'
+__RULES__
+'@ -split "`r?`n" | Where-Object { $_ } | ForEach-Object {
+    $p = $_ -split "`t"
+    [pscustomobject]@{ Servers = @($p[0] -split ','); Namespaces = @($p[1] -split ',') }
+})
+$Groups = @'
+__GROUPS__
+'@
+
+$Want = @{}
+foreach ($r in $Rules) { foreach ($n in $r.Namespaces) { $Want[$n] = $r.Servers -join ',' } }
+
+$me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    # NRPT needs admin: rerun this .bat elevated
+    Start-Process -FilePath $env:SDNS_SELF -Verb RunAs
+    exit
+}
+
+function Get-SplitState {
+    $have = @{}
+    foreach ($r in @(Get-DnsClientNrptRule | Where-Object { $_.Comment -eq $Tag })) {
+        foreach ($n in $r.Namespace) { $have[$n] = $r.NameServers -join ',' }
+    }
+    $same = $have.Count -eq $Want.Count
+    if ($same) { foreach ($k in $Want.Keys) { if ($have[$k] -ne $Want[$k]) { $same = $false; break } } }
+    $eff = @(Get-DnsClientNrptPolicy | Where-Object { $Want.ContainsKey($_.Namespace) }).Count
+    [pscustomobject]@{ Count = $have.Count; Same = $same; Effective = $eff }
+}
+
+function Remove-SplitRules {
+    foreach ($r in @(Get-DnsClientNrptRule | Where-Object { $_.Comment -eq $Tag })) {
+        Remove-DnsClientNrptRule -Name $r.Name -Force
+    }
+    Clear-DnsClientCache
+}
+
+function Add-SplitRules {
+    Remove-SplitRules
+    foreach ($r in $Rules) {
+        Add-DnsClientNrptRule -Namespace $r.Namespaces -NameServers $r.Servers -Comment $Tag | Out-Null
+    }
+    Clear-DnsClientCache
+}
+
+while ($true) {
+    Clear-Host
+    Write-Host 'Split DNS для Windows (правила NRPT)' -ForegroundColor Cyan
+    Write-Host "Скрипт создан: $Generated"
+    Write-Host ''
+    Write-Host 'Группы в этом скрипте:'
+    $Groups -split "`r?`n" | Where-Object { $_ } | ForEach-Object { Write-Host "  $_" }
+    Write-Host ''
+    $s = Get-SplitState
+    if ($s.Count -eq 0) {
+        Write-Host 'Статус: правила ВЫКЛЮЧЕНЫ' -ForegroundColor Yellow
+    } elseif ($s.Same) {
+        Write-Host "Статус: правила ВКЛЮЧЕНЫ ($($Want.Count) доменов)" -ForegroundColor Green
+        if ($s.Effective -lt $Want.Count) {
+            Write-Host "  Действуют только $($s.Effective) из $($Want.Count): возможно, их перекрывает групповая политика" -ForegroundColor Red
+        }
+    } else {
+        Write-Host "Статус: включены ДРУГИЕ правила ($($s.Count) доменов в системе, в этом скрипте $($Want.Count))" -ForegroundColor Yellow
+    }
+    Write-Host ''
+    if ($s.Count -eq 0) { Write-Host '  [1] Включить' }
+    elseif ($s.Same) { Write-Host '  [1] Выключить' }
+    else { Write-Host '  [1] Заменить правилами из этого скрипта'; Write-Host '  [2] Выключить' }
+    Write-Host '  [0] Выход'
+    $c = Read-Host 'Выбор'
+    try {
+        if ($c -eq '0') { exit }
+        elseif ($c -eq '1' -and ($s.Count -eq 0 -or -not $s.Same)) { Write-Host 'Применяю…'; Add-SplitRules }
+        elseif (($c -eq '1' -and $s.Same) -or ($c -eq '2' -and -not $s.Same -and $s.Count)) { Remove-SplitRules }
+    } catch {
+        Write-Host "Ошибка: $($_.Exception.Message)" -ForegroundColor Red
+        Read-Host 'Enter — продолжить' | Out-Null
+    }
+}
+</script>
+
+<!--PC-DATA-->
+<script>
+const MOD = '/data/adb/modules/splitdns';
+const DATA = '/data/adb/splitdns';
+const CONF = DATA + '/domains.txt';
+const SH = `sh ${MOD}/splitdns.sh`;
+// Outside KernelSU (a PC browser): groups live in localStorage and are applied by a downloaded .bat
+const PC = typeof window.ksu === 'undefined';
+const PC_KEY = 'splitdns.domains';
+
+document.body.classList.toggle('android', !PC)
+
+// [name, DoH, DoT, plain IPs]. DoH/DoT are used only on Android: Windows NRPT takes plain IPs only
+const DNS_PRESETS = [
+	["X", "", "", ""],
+	["GeoHide", "https://geohide.ru/dns-query", "", "159.194.200.33, 193.233.112.67, 193.233.112.68, 193.233.112.88, 37.230.192.51"],
+	["AstraCat", "https://dns.commonnet.work/dns-query", "", ""],
+	["MagicDNS", "https://dns.magicdns.ru/dns-query", "", "109.120.132.43, 94.249.177.102"],
+	["DNS AI", "https://dns.dns-ai.ru/dns-query", "", "194.87.196.13, 45.151.102.219"],
+	["malw.link", "https://dns.malw.link/dns-query", "", "179.254.166.171, 164.5.224.81, 2a12:bec4:1bb0:27dd::2, 2a13:82c0:0:d::3"],
+	["COMSS", "https://dns.comss.one/dns-query", "tls://dns.comss.one", "195.133.25.16"],
+	["Google", "https://dns.google/dns-query", "tls://dns.google", "8.8.8.8, 8.8.4.4, 2001:4860:4860::8888, 2001:4860:4860::8844"],
+	["Cloudflare", "https://cloudflare-dns.com/dns-query", "tls://one.one.one.one", "1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001"],
+	["OpenDNS", "https://doh.opendns.com/dns-query", "", "208.67.222.222, 208.67.220.220, 2620:119:35::35, 2620:119:53::53"],
+	["Quad9", "https://dns.quad9.net/dns-query", "tls://dns.quad9.net", "9.9.9.10, 149.112.112.112, 2620:fe::fe, 2620:fe::9"]
+]
+
+const dnsPresets = document.querySelector('#dnsPresets')
+
+DNS_PRESETS.forEach(([name, doh, dot, ip]) => {
+	if (PC && name !== "X" && !ip) return   // nothing usable on Windows
+	const b = document.createElement('button')
+	b.type = 'button'
+	b.textContent = name
+	b.onclick = () => {
+		$('fName').value = name === "X" ? "" : name
+		$('fServers').value = (PC ? [ip] : [doh, dot, ip]).filter(Boolean).join(', ')
+	}
+	dnsPresets.appendChild(b)
+})
+
+// ---- KernelSU bridge ----
+let cbSeq = 0;
+function exec(cmd, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    const name = `__ksu_cb_${Date.now()}_${cbSeq++}`;
+    const timer = setTimeout(() => {
+      window[name] = () => delete window[name];   // swallow a late callback
+      reject(new Error(`команда не ответила за ${timeoutMs / 1000} с: ${cmd.slice(0, 60)}`));
+    }, timeoutMs);
+    window[name] = (errno, stdout, stderr) => { clearTimeout(timer); delete window[name]; resolve({ errno, stdout, stderr }); };
+    try { ksu.exec(cmd, '{}', name); } catch (e) { clearTimeout(timer); delete window[name]; reject(e); }
+  });
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const sq = s => `'${String(s).replace(/'/g, `'\\''`)}'`;
+function toBase64(text) {
+  const bytes = new TextEncoder().encode(text);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+async function writeFile(path, text) {
+  const r = await exec(`mkdir -p ${sq(DATA)} && echo ${toBase64(text)} | base64 -d > ${sq(path + '.tmp')} && mv ${sq(path + '.tmp')} ${sq(path)}`);
+  if (r.errno) throw new Error(r.stderr || `write failed (${r.errno})`);
+}
+
+let snackTimer;
+function snack(msg) {
+  const el = document.getElementById('snack');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(snackTimer); snackTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+// ---- Config model: domains.txt <-> { groups, global } ----
+const state = { groups: [], global: [], enabled: true, redirect: true, running: false, def: '', detected: '', busy: false };
+
+function parseConf(text) {
+  const groups = [], global = [];
+  let cur = null;            // group object, 'global' or null (lines outside any @group)
+  for (const raw of text.split(/\r?\n/)) {
+    let line = raw.trim();
+    let m = line.match(/^#\s*@group\s+(on|off)\b\s*(.*)$/i);
+    if (m) { cur = { name: m[2].trim() || 'DNS', on: m[1].toLowerCase() === 'on', servers: [], domains: [] }; groups.push(cur); continue; }
+    if (/^#\s*@global\b/i.test(line)) { cur = 'global'; continue; }
+    let disabled = false;
+    if (line.startsWith('#@')) { line = line.slice(2).trim(); disabled = true; }
+    else line = line.replace(/#.*/, '').trim();
+    if (!line) continue;
+
+    const [first, ...names] = line.split(/\s+/);
+    const servers = first.split(',').filter(Boolean);
+    if (names.includes('*')) for (const s of servers) if (!global.includes(s)) global.push(s);
+    const doms = names.filter(n => n !== '*');
+    if (!doms.length) continue;
+
+    let g = cur && cur !== 'global' ? cur : null;
+    if (!g) {
+      // Hand-written lines without @group: one group per server set
+      const key = servers.join(',');
+      g = groups.find(x => x.legacy && x.servers.join(',') === key && x.on === !disabled);
+      if (!g) { g = { name: servers[0], on: !disabled, servers: [], domains: [], legacy: true }; groups.push(g); }
+    }
+    for (const s of servers) if (!g.servers.includes(s)) g.servers.push(s);
+    for (const d of doms) if (!g.domains.includes(d)) g.domains.push(d);
+  }
+  return { groups: groups.filter(g => g.servers.length && g.domains.length), global };
+}
+
+function buildConf() {
+  const out = [
+    '# Split DNS (managed by the WebUI; hosts-like: <dns>[,<dns>...] <name> ...)',
+    '# "# @group on|off <name>" starts a group, "#@ " = line of a disabled group, "*" = global DNS.',
+    '# A name listed on several lines belongs to the first one: upper groups win.',
+    '',
+  ];
+  for (const g of state.groups) {
+    out.push(`# @group ${g.on ? 'on' : 'off'} ${g.name.replace(/[\r\n]+/g, ' ')}`);
+    for (let i = 0; i < g.domains.length; i += 8) {
+      out.push(`${g.on ? '' : '#@ '}${g.servers.join(',')} ${g.domains.slice(i, i + 8).join(' ')}`);
+    }
+    out.push('');
+  }
+  out.push('# @global');
+  if (state.global.length) out.push(`${state.global.join(',')} *`);
+  return out.join('\n') + '\n';
+}
+
+// ---- Validation ----
+const SERVER_RE = [
+  /^(\d{1,3}\.){3}\d{1,3}$/,
+  /^[0-9a-f]*:[0-9a-f:.]*$/i,
+  /^(https|tls|quic|h3|sdns|tcp|udp):\/\/\S+$/i,
+];
+function parseServers(text) {
+  const list = text.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+  const bad = list.filter(s => !SERVER_RE.some(re => re.test(s)));
+  return { list: [...new Set(list)], bad };
+}
+const DOMAIN_RE = /^\.?[a-z0-9_-]+(\.[a-z0-9_-]+)*$/;
+function parseDomains(text) {
+  const list = [], bad = [];
+  for (let d of text.split(/[\s,;]+/)) {
+    d = d.trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/[/?#].*$/, '').replace(/^\*\./, '.').replace(/\.$/, '');
+    if (!d) continue;
+    if (DOMAIN_RE.test(d)) { if (!list.includes(d)) list.push(d); } else bad.push(d);
+  }
+  return { list, bad };
+}
+
+// ---- Rendering ----
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// Count first, so the ellipsis never hides it
+function shortDomains(d) {
+  return `${d.length} · ${d.slice(0, 6).join(', ')}`;
+}
+
+const HANDLE_SVG = '<svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">' +
+  [5, 9, 13].map(y => `<circle cx="6" cy="${y}" r="1.6"/><circle cx="12" cy="${y}" r="1.6"/>`).join('') + '</svg>';
+
+function render() {
+  $('master').hidden = PC;
+  $('pcCard').hidden = !PC;
+  $('masterSw').checked = state.enabled;
+  $('masterSw').disabled = state.busy;
+  $('redirectCb').checked = state.redirect;
+  $('redirectCb').disabled = state.busy;
+  $('redirectHint').textContent = state.redirect
+    ? 'Весь DNS телефона перенаправляется на dnsproxy (iptables).'
+    : `Перехватываются только запросы к ${state.vpnDns || '192.0.2.53'} — укажите этот адрес как DNS в VPN-клиенте. Без VPN DNS не меняется.`;
+  $('status').textContent = state.busy ? 'Применяю…'
+    : !state.enabled ? 'Выключено: DNS не изменяется'
+    : state.running ? `Работает · DNS по умолчанию: ${state.def || '—'}`
+    : 'Не запущено — см. /data/adb/splitdns/splitdns.log';
+
+  const box = $('groups');
+  box.innerHTML = '';
+  state.groups.forEach((g, i) => {
+    const el = document.createElement('div');
+    el.className = 'card tap group' + (g.on ? '' : ' off');
+    el.dataset.i = i;
+    el.innerHTML = `
+      <div class="row">
+        <div class="title">${esc(g.name)}</div>
+        <label class="switch"><input type="checkbox" ${g.on ? 'checked' : ''} ${state.busy ? 'disabled' : ''}><span></span></label>
+        <div class="handle" title="Перетащить">${HANDLE_SVG}</div>
+      </div>
+      <div class="mono line1">${esc(g.servers.join(', '))}</div>
+      <div class="sub line1">${esc(shortDomains(g.domains))}</div>`;
+    el.querySelector('input').addEventListener('change', e => { g.on = e.target.checked; save(); });
+    el.querySelector('.switch').addEventListener('click', e => e.stopPropagation());
+    el.addEventListener('click', () => openDialog(i));
+    initDrag(el.querySelector('.handle'), el);
+    box.appendChild(el);
+  });
+
+  $('globalServers').textContent = state.global.length ? state.global.join(', ')
+    : PC ? 'Авто · DNS VPN/сети (правило «.» не создаётся)'
+    : `Авто · DNS VPN/сети: ${state.detected.trim() || 'не определён'}`;
+}
+
+// ---- Drag to reorder (pointer events: HTML5 DnD does not work with touch) ----
+function initDrag(handle, card) {
+  handle.addEventListener('click', e => e.stopPropagation());
+  handle.addEventListener('pointerdown', e => {
+    if (state.busy) return;
+    e.preventDefault(); e.stopPropagation();
+    const box = $('groups');
+    const grab = e.clientY - card.getBoundingClientRect().top;
+    const before = [...box.children].indexOf(card);
+    card.classList.add('dragging');
+
+    const move = ev => {
+      if (ev.pointerId !== e.pointerId) return;
+      const y = ev.clientY;
+      const others = [...box.children].filter(c => c !== card);
+      const next = others.find(c => { const r = c.getBoundingClientRect(); return y < r.top + r.height / 2; }) || null;
+      if (next !== card.nextElementSibling) box.insertBefore(card, next);
+      card.style.transform = '';
+      const top = card.getBoundingClientRect().top;
+      card.style.transform = `translateY(${y - grab - top}px)`;
+    };
+    const up = ev => {
+      if (ev.pointerId !== e.pointerId) return;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      card.classList.remove('dragging');
+      card.style.transform = '';
+      const order = [...box.children].map(c => +c.dataset.i);
+      if ([...box.children].indexOf(card) !== before) {
+        state.groups = order.map(i => state.groups[i]);
+        save();
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  });
+}
+
+// ---- Dialog ----
+let editing = null;   // index, -1 = new group, 'global'
+function openDialog(which) {
+  editing = which;
+  const isGlobal = which === 'global';
+  const g = typeof which === 'number' && which >= 0 ? state.groups[which] : null;
+  $('dlgTitle').textContent = isGlobal ? 'Глобальный DNS' : g ? 'Изменить DNS' : 'Новый DNS';
+  $('nameWrap').hidden = isGlobal;
+  $('domainsWrap').hidden = isGlobal;
+  $('delBtn').hidden = !g;
+  $('delBtn').textContent = 'Удалить';
+  delete $('delBtn').dataset.armed;
+  $('fName').value = g ? g.name : '';
+  $('fServers').value = (isGlobal ? state.global : g ? g.servers : []).join(', ');
+  $('fDomains').value = g ? g.domains.join('\n') : '';
+  $('serversHint').textContent = (isGlobal
+    ? 'Пусто — DNS активного VPN или сети. Через запятую: IP, https://…, tls://…, quic://…'
+    : 'Через запятую: IP, https://… (DoH), tls://… (DoT), quic://… (DoQ)')
+    + (PC ? '. Windows берёт только IP: DoH/DoT в .bat не попадут' : '')
+    + (PC && isGlobal ? ', а глобальный DNS станет правилом «.» для всех доменов' : '');
+  $('serversErr').textContent = $('domainsErr').textContent = '';
+  $('dlg').showModal();
+}
+
+$('dlgForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const sv = parseServers($('fServers').value);
+  $('serversErr').textContent = sv.bad.length ? `Не похоже на DNS: ${sv.bad.join(', ')}` : '';
+  if (editing === 'global') {
+    if (sv.bad.length) return;
+    state.global = sv.list;
+  } else {
+    const dm = parseDomains($('fDomains').value);
+    if (!sv.list.length && !sv.bad.length) $('serversErr').textContent = 'Укажите хотя бы один адрес';
+    $('domainsErr').textContent = dm.bad.length ? `Неверные домены: ${dm.bad.slice(0, 5).join(', ')}${dm.bad.length > 5 ? '…' : ''}`
+      : dm.list.length ? '' : 'Укажите хотя бы один домен';
+    if ($('serversErr').textContent || $('domainsErr').textContent) return;
+    const name = $('fName').value.trim() || sv.list[0];
+    if (editing >= 0) Object.assign(state.groups[editing], { name, servers: sv.list, domains: dm.list, legacy: false });
+    else state.groups.push({ name, on: true, servers: sv.list, domains: dm.list });
+  }
+  $('dlg').close();
+  save();
+});
+$('cancelBtn').addEventListener('click', () => $('dlg').close());
+// Two taps instead of confirm(): JS dialogs are not shown in every WebView
+$('delBtn').addEventListener('click', () => {
+  const b = $('delBtn');
+  if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Точно удалить?'; return; }
+  state.groups.splice(editing, 1);
+  $('dlg').close();
+  save();
+});
+// PC: lists are inlined by Build-Module.ps1 (window.__lists), else fetched next to the module
+async function readList(name) {
+  if (!PC) {
+    const r = await exec(`cat ${sq(`${MOD}/lists/${name}`)}`);
+    if (r.errno) throw new Error(r.stderr);
+    return r.stdout;
+  }
+  if (window.__lists && window.__lists[name]) return window.__lists[name];
+  const resp = await fetch(`../lists/${name}`);
+  if (!resp.ok) throw new Error(resp.status);
+  return resp.text();
+}
+document.querySelectorAll('[data-list]').forEach(b => b.addEventListener('click', async () => {
+  let text;
+  try { text = await readList(b.dataset.list); }
+  catch { snack(`Не удалось прочитать ${b.dataset.list}`); return; }
+  const have = parseDomains($('fDomains').value).list;
+  const add = parseDomains(text.replace(/#.*$/gm, '')).list.filter(d => !have.includes(d));
+  const ta = $('fDomains');
+  ta.value = (ta.value.trim() ? ta.value.replace(/\s*$/, '\n') : '') + add.join('\n');
+  snack(add.length ? `Добавлено доменов: ${add.length}` : 'Все домены уже в списке');
+}));
+$('addBtn').addEventListener('click', () => openDialog(-1));
+$('global').addEventListener('click', () => openDialog('global'));
+
+// ---- Load / save / apply ----
+async function refreshStatus(fast = false) {
+  const r = await exec(`${SH} webstatus${fast ? ' fast' : ''}`);
+  const kv = Object.fromEntries(r.stdout.split('\n').filter(l => l.includes('=')).map(l => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
+  state.enabled = kv.enabled !== '0';
+  state.redirect = kv.redirect !== '0';
+  state.vpnDns = kv.vpndns || '';
+  state.running = kv.running === '1';
+  state.def = (kv.default || '').trim();
+  if (!fast) state.detected = kv.detected || '';
+  return kv;
+}
+
+// splitdns.sh runs detached ("apply"), so exec returns at once; then poll until it finishes
+async function apply(cmd) {
+  const r = await exec(`${SH} apply ${cmd}`);
+  if (r.errno) throw new Error(r.stdout.trim() || r.stderr || `apply ${cmd}: ${r.errno}`);
+  for (let i = 0; i < 60; i++) {
+    await sleep(500);
+    const kv = await refreshStatus(true);
+    if (kv.applying !== '1') {
+      if (kv.result !== '0') throw new Error(kv.lastlog || `код ${kv.result}`);
+      return;
+    }
+  }
+  throw new Error('применение не завершилось за 30 с, см. /data/adb/splitdns/splitdns.log');
+}
+
+async function withBusy(fn) {
+  state.busy = true; render();
+  try { await fn(); }
+  catch (e) { snack(`Ошибка: ${e.message || e}`); }
+  finally { state.busy = false; if (!PC) await refreshStatus().catch(() => {}); render(); }
+}
+
+function save() {
+  if (PC) {
+    try { localStorage.setItem(PC_KEY, buildConf()); snack('Сохранено в браузере. Скачайте .bat заново'); }
+    catch { snack('Браузер не дал сохранить: используйте Экспорт domains.txt'); }
+    render();
+    return;
+  }
+  return withBusy(async () => {
+    await writeFile(CONF, buildConf());
+    if (state.enabled) {
+      await apply('restart');
+      snack('Сохранено и применено');
+    } else snack('Сохранено');
+  });
+}
+
+$('masterSw').addEventListener('change', e => {
+  // Read the new value before withBusy() re-renders the switch
+  const on = e.target.checked;
+  state.enabled = on;
+  withBusy(() => apply(on ? 'enable' : 'disable'));
+});
+$('redirectCb').addEventListener('change', e => {
+  const on = e.target.checked;
+  state.redirect = on;
+  withBusy(() => apply(on ? 'redirect-on' : 'redirect-off'));
+});
+
+// ---- PC: .bat with NRPT rules, import/export ----
+const IP_RE = [/^(\d{1,3}\.){3}\d{1,3}$/, /^[0-9a-f]*:[0-9a-f:.]*$/i];
+const isIp = s => IP_RE.some(re => re.test(s));
+
+// Same meaning as on Android: "site.com" = the name and its subdomains, ".site.com" = subdomains only.
+// Upper groups win; one NRPT rule per server set (adding thousands of single rules takes minutes).
+function nrptRules() {
+  const seen = new Set(), bySrv = new Map();
+  const add = (servers, ns) => {
+    if (seen.has(ns)) return;
+    seen.add(ns);
+    const key = servers.join(',');
+    if (!bySrv.has(key)) bySrv.set(key, []);
+    bySrv.get(key).push(ns);
+  };
+  for (const g of state.groups.filter(g => g.on)) {
+    const ips = g.servers.filter(isIp);
+    if (!ips.length) continue;
+    for (const d of g.domains) {
+      if (d.startsWith('.')) add(ips, d);
+      else { add(ips, d); add(ips, '.' + d); }
+    }
+  }
+  const gips = state.global.filter(isIp);
+  if (gips.length) add(gips, '.');
+  const lines = [];
+  for (const [srv, names] of bySrv) {
+    for (let i = 0; i < names.length; i += 500) lines.push(`${srv}\t${names.slice(i, i + 500).join(',')}`);
+  }
+  return lines;
+}
+
+function buildBat() {
+  const groups = state.groups.map(g => {
+    const ips = g.servers.filter(isIp);
+    const note = !g.on ? 'выкл' : !ips.length ? 'нет IP — пропущена' : ips.length < g.servers.length ? 'DoH/DoT пропущены' : '';
+    return `${g.on ? '+' : '-'} ${g.name}: ${g.domains.length} доменов → ${ips.join(', ') || g.servers.join(', ')}${note ? ` (${note})` : ''}`;
+  });
+  const gips = state.global.filter(isIp);
+  groups.push(gips.length ? `* Глобальный DNS: ${gips.join(', ')}` : '* Глобальный DNS: авто (не меняется)');
+  return $('batTemplate').textContent
+    .replace('__DATE__', new Date().toLocaleString('ru-RU'))
+    .replace('__RULES__', () => nrptRules().join('\n'))
+    .replace('__GROUPS__', () => groups.join('\n').replace(/'@/g, "'"))
+    .replace(/\r?\n/g, '\r\n');   // cmd wants CRLF
+}
+
+function download(name, text) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'application/octet-stream' }));
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+$('dlBat').addEventListener('click', () => download('SplitDNS.bat', buildBat()));
+$('exportBtn').addEventListener('click', () => download('domains.txt', buildConf()));
+$('importBtn').addEventListener('click', () => $('importFile').click());
+$('importFile').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  Object.assign(state, parseConf(await f.text()));
+  save();
+});
+
+(async () => {
+  if (PC) {
+    let text = null;
+    try { text = localStorage.getItem(PC_KEY); } catch {}
+    Object.assign(state, parseConf(text ?? window.__defaultConf ?? ''));
+    render();
+    return;
+  }
+  try {
+    const r = await exec(`cat ${sq(CONF)} 2>/dev/null`);
+    Object.assign(state, parseConf(r.stdout || ''));
+    await refreshStatus();
+  } catch (e) {
+    snack(`KernelSU API недоступен: ${e.message || e}`);
+  }
+  render();
+})();
+</script>
+</body>
+</html>

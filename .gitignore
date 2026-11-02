@@ -1,0 +1,10 @@
+# Build output
+splitdns-module.zip
+SplitDNS-PC.html
+_site/
+.dnsproxy-*/
+
+# Local test data
+hosts*.txt
+summary.txt
+module/*.zip
