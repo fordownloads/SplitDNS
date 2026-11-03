@@ -29,7 +29,7 @@ param(
     [Parameter(Position = 0)]
     [string]$Path = (Join-Path $PSScriptRoot 'hosts.txt'),
     [string[]]$Name,
-    [string[]]$Servers = @('37.230.192.51'),
+    [string[]]$Servers = @('1.1.1.1'),
     [ValidateSet('A', 'AAAA')]
     [string]$Type = 'A',
     [string]$Csv,

@@ -11,13 +11,13 @@ DISABLED=$DATA/disabled    # set by "disable" / the WebUI master switch, survive
 RUN=$DATA/run
 LOG=$DATA/splitdns.log
 BIN=$MODDIR/bin/dnsproxy
-NOREDIRECT=$DATA/no-redirect   # "Replace system DNS" off: redirect only DNS sent to VPN_DNS_IP
-# Address to put into the VPN client as its DNS (clients reject 127.0.0.1).
+NOREDIRECT=$DATA/no-redirect   # "Replace system DNS" off: redirect only DNS sent to LISTEN_DNS_IP
+# Address to put into the client as its DNS (clients reject 127.0.0.1).
 # 192.0.2.0/24 (TEST-NET-1, RFC 5737) is for documentation only: nothing real lives
 # there, and unlike 198.18.0.0/15 it is not a Clash/sing-box fake-IP range.
-# Override: echo 10.x.x.x > /data/adb/splitdns/vpn-dns-ip
-VPN_DNS_IP=192.0.2.53
-[ -s "$DATA/vpn-dns-ip" ] && VPN_DNS_IP=$(head -n 1 "$DATA/vpn-dns-ip" | tr -d ' \r\n')
+# Override: echo 10.x.x.x > /data/adb/splitdns/listen-dns-ip
+LISTEN_DNS_IP=192.0.2.53
+[ -s "$DATA/listen-dns-ip" ] && LISTEN_DNS_IP=$(head -n 1 "$DATA/listen-dns-ip" | tr -d ' \r\n')
 PORT=5354
 GID=23333          # dnsproxy runs with this gid; its own queries are not redirected
 CHAIN=SPLITDNS
@@ -88,7 +88,7 @@ parse_conf() {
   [ -s "$RUN/rules" ] || { log "no rules in $CONF"; return 1; }
 }
 
-# DNS servers of the active VPN, else of the default network
+# DNS servers of the default network
 detect_default() {
   dc=$(dumpsys connectivity 2>/dev/null)
   nai=$(echo "$dc" | grep 'NetworkAgentInfo{' | grep 'Transports: VPN' | head -n 1)
@@ -97,7 +97,7 @@ detect_default() {
     [ -n "$id" ] && nai=$(echo "$dc" | grep "NetworkAgentInfo{network{$id}" | head -n 1)
   fi
   echo "$nai" | sed -n 's/.* DnsAddresses: \[\([^]]*\)\].*/\1/p' | tr ',' '\n' |
-    sed 's/^[ /]*//; s/[ ]*$//; s/%.*//' | grep -iv -e '^$' -e '^127\.' -e '^::1$' -e '^fe80:' -e "^$VPN_DNS_IP\$"
+    sed 's/^[ /]*//; s/[ ]*$//; s/%.*//' | grep -iv -e '^$' -e '^127\.' -e '^::1$' -e '^fe80:' -e "^$LISTEN_DNS_IP\$"
 }
 
 # Default upstreams: "*" lines, else autodetected
@@ -153,13 +153,13 @@ start_proxy() {
   log "dnsproxy pid $(cat "$RUN/proxy.pid"), default DNS: $dflt"
 }
 
-# Only DNS sent to VPN_DNS_IP goes to dnsproxy; everything else is untouched
-ipt_on_vpn_ip() {
+# Only DNS sent to LISTEN_DNS_IP goes to dnsproxy; everything else is untouched
+ipt_on_listen_ip() {
   iptables -w -t nat -N $CHAIN 2>/dev/null
   iptables -w -t nat -F $CHAIN
   iptables -w -t nat -A $CHAIN -m owner --gid-owner $GID -j RETURN
-  iptables -w -t nat -A $CHAIN -d "$VPN_DNS_IP" -p udp --dport 53 -j REDIRECT --to-ports $PORT
-  iptables -w -t nat -A $CHAIN -d "$VPN_DNS_IP" -p tcp --dport 53 -j REDIRECT --to-ports $PORT
+  iptables -w -t nat -A $CHAIN -d "$LISTEN_DNS_IP" -p udp --dport 53 -j REDIRECT --to-ports $PORT
+  iptables -w -t nat -A $CHAIN -d "$LISTEN_DNS_IP" -p tcp --dport 53 -j REDIRECT --to-ports $PORT
   iptables -w -t nat -C OUTPUT -j $CHAIN 2>/dev/null || iptables -w -t nat -I OUTPUT -j $CHAIN
 }
 
@@ -226,8 +226,8 @@ do_start() {
   parse_conf || { set_status "Error: no rules in $CONF"; return 1; }
   start_proxy || { set_status "Error: dnsproxy failed, see $LOG"; return 1; }
   if [ -f "$NOREDIRECT" ]; then
-    ipt_on_vpn_ip
-    mode="only DNS to $VPN_DNS_IP (set it as DNS in the VPN client)"
+    ipt_on_listen_ip
+    mode="only DNS to $LISTEN_DNS_IP (set it as DNS)"
   else
     ipt_on
     mode="system DNS redirected"
@@ -239,7 +239,7 @@ do_start() {
   log "applied $rules rules from $CONF"
 }
 
-# Restarts dnsproxy when it dies or when the VPN/network DNS changes
+# Restarts dnsproxy when it dies or when the network DNS changes
 do_watch() {
   while sleep $WATCH_INTERVAL; do
     [ -f "$RUN/rules" ] || exit 0
@@ -287,7 +287,7 @@ case "$1" in
     # key=value for the WebUI
     if [ -f "$DISABLED" ]; then echo enabled=0; else echo enabled=1; fi
     if [ -f "$NOREDIRECT" ]; then echo redirect=0; else echo redirect=1; fi
-    echo "vpndns=$VPN_DNS_IP"
+    echo "LISTEN_DNS_IP=$LISTEN_DNS_IP"
     if proxy_alive; then echo running=1; else echo running=0; fi
     if [ -f "$RUN/applying" ]; then echo applying=1; else echo applying=0; fi
     echo "result=$(cat "$RUN/apply.result" 2>/dev/null)"

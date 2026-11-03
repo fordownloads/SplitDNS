@@ -20,6 +20,7 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
     font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent) }
   main { max-width: 640px; margin: 0 auto;
     padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
   h1 { font-size: 22px; font-weight: 600; margin: 4px 4px 16px; }
@@ -79,7 +80,7 @@
   input.t:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
   .err { font-size: 12px; color: var(--danger); margin-top: 6px; min-height: 0; }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px }
   .chips button { padding: 8px 12px; font-size: 14px; }
   .dlg-actions { margin-top: auto; display: flex; gap: 8px; padding: 12px 18px 16px; border-top: 1px solid var(--line); }
   .dlg-actions .spacer { flex: 1; }
@@ -109,8 +110,8 @@
 
   <!-- Shown instead of #master when opened outside KernelSU (on a PC) -->
   <div class="card" id="pcCard" hidden>
-    <div class="row"><div class="title">Windows (NRPT)</div></div>
-    <div class="sub">Группы хранятся в этом браузере. Скачайте .bat и запустите его: он покажет статус правил и предложит включить или выключить их.</div>
+    <div class="row"><div class="title">Применить правила (NRPT)</div></div>
+    <div class="sub">Скачайте .bat и запустите его: он покажет статус правил и предложит включить или выключить их</div>
     <div class="chips" style="margin-top: 12px">
       <button type="button" class="primary" id="dlBat">Скачать .bat</button>
       <button type="button" id="exportBtn">Экспорт domains.txt</button>
@@ -119,7 +120,7 @@
     </div>
   </div>
 
-  <div class="section">Группы DNS · при одинаковом домене побеждает верхняя</div>
+  <div class="section">Список провайдеров (приоритет сверху)</div>
   <div id="groups"></div>
 
   <div class="card tap" id="global">
@@ -128,6 +129,8 @@
   </div>
 
   <button class="add" id="addBtn">+ Добавить DNS</button>
+  
+  <div class="section">Исходный код: <a href="https://github.com/fordownloads/SplitDNS">GitHub</a></div>
 </main>
 
 <dialog id="dlg">
@@ -136,27 +139,24 @@
       <h2 id="dlgTitle">Новый DNS</h2>
       <div id="nameWrap">
         <label class="f" for="fName">Название</label>
-        <input class="t" id="fName" autocomplete="off" placeholder="Например, GeoHide">
+        <input class="t" id="fName" autocomplete="off">
       </div>
       <label class="f" for="fServers">Адреса DNS</label>
       <input class="t" id="fServers" autocomplete="off" autocapitalize="off" spellcheck="false"
              placeholder="9.9.9.10, https://dns.quad9.net/dns-query">
-      <div class="hint" id="serversHint">Через запятую: IP, https://… (DoH), tls://… (DoT), quic://… (DoQ)</div>
-      <div class="hint">Рекомендуется: Quad9 (обычный), GeoHide (обход)</div>
+             <div class="chips" id="dnsPresets"></div>
+      <div class="hint" id="serversHint">Через запятую: IP, https:// (DoH), tls:// (DoT), quic:// (DoQ)</div>
       <div class="err" id="serversErr"></div>
-      <div class="chips" id="dnsPresets">
-      </div>
       <div id="domainsWrap">
         <label class="f" for="fDomains">Домены</label>
         <textarea id="fDomains" autocapitalize="off" spellcheck="false"
                   placeholder="google.com&#10;.googleapis.com&#10;youtube.com"></textarea>
-        <div class="hint">Один на строку. «site.com» — сам домен и поддомены, «.site.com» — только поддомены.</div>
-        <div class="err" id="domainsErr"></div>
-        <label class="f">Быстрый выбор доменов</label>
         <div class="chips">
           <button type="button" data-list="AI-domains.txt">Нейросети</button>
           <button type="button" data-list="GeoHide-domains.txt">Список GeoHide</button>
         </div>
+        <div class="hint">Один на строку. «site.com» — домен и поддомены, «.site.com» — только поддомены.</div>
+        <div class="err" id="domainsErr"></div>
       </div>
     </div>
     <div class="dlg-actions">
@@ -180,7 +180,7 @@ exit /b
 $ErrorActionPreference = 'Stop'
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
 $Host.UI.RawUI.WindowTitle = 'Split DNS (NRPT)'
-$Tag = 'vpn-dns-bypass'
+$Tag = 'splitdns-bypass'
 $Generated = '__DATE__'
 
 # <servers>TAB<namespace>,<namespace>,...  ("name" exact, ".name" subdomains, "." everything)
@@ -280,17 +280,17 @@ document.body.classList.toggle('android', !PC)
 
 // [name, DoH, DoT, plain IPs]. DoH/DoT are used only on Android: Windows NRPT takes plain IPs only
 const DNS_PRESETS = [
-	["X", "", "", ""],
-	["GeoHide", "https://geohide.ru/dns-query", "", "159.194.200.33, 193.233.112.67, 193.233.112.68, 193.233.112.88, 37.230.192.51"],
-	["AstraCat", "https://dns.commonnet.work/dns-query", "", ""],
+	["Сброс", "", "", ""],
 	["MagicDNS", "https://dns.magicdns.ru/dns-query", "", "109.120.132.43, 94.249.177.102"],
+	["GeoHide", "https://geohide.ru/dns-query", "", "159.194.200.33, 193.233.112.67, 193.233.112.68, 193.233.112.88, 37.230.192.51"],
 	["DNS AI", "https://dns.dns-ai.ru/dns-query", "", "194.87.196.13, 45.151.102.219"],
+	["AstraCat", "https://dns.commonnet.work/dns-query", "", ""],
 	["malw.link", "https://dns.malw.link/dns-query", "", "179.254.166.171, 164.5.224.81, 2a12:bec4:1bb0:27dd::2, 2a13:82c0:0:d::3"],
 	["COMSS", "https://dns.comss.one/dns-query", "tls://dns.comss.one", "195.133.25.16"],
-	["Google", "https://dns.google/dns-query", "tls://dns.google", "8.8.8.8, 8.8.4.4, 2001:4860:4860::8888, 2001:4860:4860::8844"],
+	["Quad9", "https://dns.quad9.net/dns-query", "tls://dns.quad9.net", "9.9.9.10, 149.112.112.112, 2620:fe::fe, 2620:fe::9"],
 	["Cloudflare", "https://cloudflare-dns.com/dns-query", "tls://one.one.one.one", "1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001"],
-	["OpenDNS", "https://doh.opendns.com/dns-query", "", "208.67.222.222, 208.67.220.220, 2620:119:35::35, 2620:119:53::53"],
-	["Quad9", "https://dns.quad9.net/dns-query", "tls://dns.quad9.net", "9.9.9.10, 149.112.112.112, 2620:fe::fe, 2620:fe::9"]
+	["Google", "https://dns.google/dns-query", "tls://dns.google", "8.8.8.8, 8.8.4.4, 2001:4860:4860::8888, 2001:4860:4860::8844"],
+	["OpenDNS", "https://doh.opendns.com/dns-query", "", "208.67.222.222, 208.67.220.220, 2620:119:35::35, 2620:119:53::53"]
 ]
 
 const dnsPresets = document.querySelector('#dnsPresets')
@@ -437,7 +437,7 @@ function render() {
   $('redirectCb').disabled = state.busy;
   $('redirectHint').textContent = state.redirect
     ? 'Весь DNS телефона перенаправляется на dnsproxy (iptables).'
-    : `Перехватываются только запросы к ${state.vpnDns || '192.0.2.53'} — укажите этот адрес как DNS в VPN-клиенте. Без VPN DNS не меняется.`;
+    : `Перехватываются только запросы к ${state.bdns || '192.0.2.53'} — укажите этот адрес как DNS.`;
   $('status').textContent = state.busy ? 'Применяю…'
     : !state.enabled ? 'Выключено: DNS не изменяется'
     : state.running ? `Работает · DNS по умолчанию: ${state.def || '—'}`
@@ -465,8 +465,8 @@ function render() {
   });
 
   $('globalServers').textContent = state.global.length ? state.global.join(', ')
-    : PC ? 'Авто · DNS VPN/сети (правило «.» не создаётся)'
-    : `Авто · DNS VPN/сети: ${state.detected.trim() || 'не определён'}`;
+    : PC ? 'Не изменять глобальный DNS'
+    : `Авто · DNS текущей сети: ${state.detected.trim() || 'не определён'}`;
 }
 
 // ---- Drag to reorder (pointer events: HTML5 DnD does not work with touch) ----
@@ -524,11 +524,13 @@ function openDialog(which) {
   $('fName').value = g ? g.name : '';
   $('fServers').value = (isGlobal ? state.global : g ? g.servers : []).join(', ');
   $('fDomains').value = g ? g.domains.join('\n') : '';
-  $('serversHint').textContent = (isGlobal
-    ? 'Пусто — DNS активного VPN или сети. Через запятую: IP, https://…, tls://…, quic://…'
-    : 'Через запятую: IP, https://… (DoH), tls://… (DoT), quic://… (DoQ)')
-    + (PC ? '. Windows берёт только IP: DoH/DoT в .bat не попадут' : '')
-    + (PC && isGlobal ? ', а глобальный DNS станет правилом «.» для всех доменов' : '');
+  $('serversHint').textContent =
+    (PC
+      ? 'IP через запятую, DoT/DoH/QUIC не поддерживаются'
+      : 'Через запятую: IP, https:// (DoH), tls:// (DoT), quic:// (DoQ)') +
+    (isGlobal ? 'Пусто — DNS активной сети.' : '') +
+    '\nРекомендуется: Quad9 (глобальный), GeoHide/MagicDNS/DNS AI (обход)'
+
   $('serversErr').textContent = $('domainsErr').textContent = '';
   $('dlg').showModal();
 }
@@ -557,7 +559,7 @@ $('cancelBtn').addEventListener('click', () => $('dlg').close());
 // Two taps instead of confirm(): JS dialogs are not shown in every WebView
 $('delBtn').addEventListener('click', () => {
   const b = $('delBtn');
-  if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Точно удалить?'; return; }
+  if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Вы уверены?'; return; }
   state.groups.splice(editing, 1);
   $('dlg').close();
   save();
@@ -593,7 +595,7 @@ async function refreshStatus(fast = false) {
   const kv = Object.fromEntries(r.stdout.split('\n').filter(l => l.includes('=')).map(l => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
   state.enabled = kv.enabled !== '0';
   state.redirect = kv.redirect !== '0';
-  state.vpnDns = kv.vpndns || '';
+  state.bdns = kv.bdns || '';
   state.running = kv.running === '1';
   state.def = (kv.default || '').trim();
   if (!fast) state.detected = kv.detected || '';

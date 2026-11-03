@@ -23,7 +23,7 @@
 [CmdletBinding()]
 param(
     [string]$Path = (Join-Path $PSScriptRoot 'domains.txt'),
-    [string]$Tag = 'vpn-dns-bypass',
+    [string]$Tag = 'splitdns-bypass',
     [switch]$Remove
 )
 
