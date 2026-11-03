@@ -1,0 +1,22 @@
+# Split DNS (managed by the WebUI; hosts-like: <dns>[,<dns>...] <name> ...)
+# "# @group on|off <name>" starts a group, "#@ " = line of a disabled group, "*" = global DNS.
+# A name listed on several lines belongs to the first one: upper groups win.
+
+# @group on GeoHide (стандартный, только нейросети)
+159.194.200.33,193.233.112.67,193.233.112.68,193.233.112.88,37.230.192.51 adobe.io ai.google.dev aicode.googleapis.com aida.googleapis.com aisandbox-pa.googleapis.com aistudio.google.com aitestkitchen.withgoogle.com alkalicore-pa.clients6.google.com
+159.194.200.33,193.233.112.67,193.233.112.68,193.233.112.88,37.230.192.51 alkalimakersuite-pa.clients6.google.com anthropic.com antigravity-pa.googleapis.com antigravity-unleash.goog antigravity.google antigravity.googleapis.com api-sg-central.trae.ai api.trae.ai
+159.194.200.33,193.233.112.67,193.233.112.68,193.233.112.88,37.230.192.51 api16-normal-alisg.mchost.guru apis.google.com appcatalyst.pa.googleapis.com assistant-s3-pa.googleapis.com bard.google.com camelai.com cerebras.ai character.ai
+159.194.200.33,193.233.112.67,193.233.112.68,193.233.112.88,37.230.192.51 chatgpt.com chatgpt.site cici.com claude.ai claude.com claudemcpclient.com claudeusercontent.com codeium.com
+159.194.200.33,193.233.112.67,193.233.112.68,193.233.112.88,37.230.192.51 codeiumdata.com copilot.microsoft.com cursor-cdn.com cursor.com cursor.sh cursorvm.com daily-cloudcode-pa.googleapis.com datastudio.google.com
+159.194.200.33,193.233.112.67,193.233.112.68,193.233.112.88,37.230.192.51 deepl.app deepl.com deepmind.com deepmind.google developerprofiles-pa.googleapis.com dola.com download.todesktop.com elevenlabs.io
+159.194.200.33,193.233.112.67,193.233.112.68,193.233.112.88,37.230.192.51 elevenmusic.io elevenreader.io files.manuscdn.com flow.google flow.google.com flowmusic.app geller-pa.googleapis.com gemini.google
+159.194.200.33,193.233.112.67,193.233.112.68,193.233.112.88,37.230.192.51 gemini.google.com geminiweb-pa.clients.google.com geminiweb-pa.clients6.google.com generativeai.google generativelanguage.googleapis.com genspark.ai grok.com grok.x.com
+159.194.200.33,193.233.112.67,193.233.112.68,193.233.112.88,37.230.192.51 groq.com hume.ai jules.google jules.google.com kaleido.ai labs.google labs.google.com labstailwind.pa.googleapis.com
+159.194.200.33,193.233.112.67,193.233.112.68,193.233.112.88,37.230.192.51 lookerstudio.google.com makersuite.google.com manus.im marketplace.cursorapi.com meta.ai midjourney.com mistral.ai monica.im
+159.194.200.33,193.233.112.67,193.233.112.68,193.233.112.88,37.230.192.51 notebook-pa.googleapis.com notebook.google notebook.google.com notebooklm-pa.googleapis.com notebooklm.google notebooklm.google.com o.pki.goog oaistatic.com
+159.194.200.33,193.233.112.67,193.233.112.68,193.233.112.88,37.230.192.51 oaiusercontent.com opal.google opal.google.com opal.withgoogle.com openai.com opencode.ai openrouter.ai people-pa.clients6.google.com
+159.194.200.33,193.233.112.67,193.233.112.68,193.233.112.88,37.230.192.51 perplexity.ai playground.google poe.com pplx.ai proactivebackend-pa.googleapis.com reve.art reve.com robinfrontend-pa.googleapis.com
+159.194.200.33,193.233.112.67,193.233.112.68,193.233.112.88,37.230.192.51 signaler-pa.clients6.google.com sora.com stitch.withgoogle.com suggestqueries.google.com suno.ai suno.com sydney.bing.com trae-api-sg.mchost.guru
+159.194.200.33,193.233.112.67,193.233.112.68,193.233.112.88,37.230.192.51 waa-pa.clients6.google.com webchannel-alkalimakersuite-pa.clients6.google.com windsurf.com x.ai
+
+# @global
