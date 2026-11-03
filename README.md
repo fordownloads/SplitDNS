@@ -26,7 +26,7 @@
 
 ## Android
 
-1. Установите splitdns.zip в KernelSU или Magisk с поддержкой KSUWebUI. Перезагрузитесь.
+1. Установите [splitdns.zip](https://github.com/fordownloads/SplitDNS/releases) в KernelSU или Magisk с поддержкой KSUWebUI. Перезагрузитесь.
 2. Добавьте DNS (например, GeoHide)
 3. Задайте ему домены (например, "Список GeoHide")
 4. По желанию задайте Глобальный DNS, куда будут идти все остальные запросы (например, Quad9, т.к. провайдеры на данный момент подделывают запросы к Google и Cloudflare)
